@@ -11,9 +11,10 @@ A full-stack classroom ERP for a coffee-bean distributor: sales, inventory, invo
 
 ## Features
 
+- Demo usernames: `admin`, `sales`, `warehouse`, `accountant`. Passwords are in the privately delivered account sheet, following the requirement to keep public source free of credentials.
 - Four authenticated roles: Admin, Sales, Warehouse and Accountant. Disallowed actions return HTTP 403 from the backend and database gateway.
 - Create, list, edit and deactivate products/customers; required-field, unique-SKU and numeric validation.
-- Manual stock-in with movement history and low-stock badges.
+- Manual stock-in with movement history (including opening balances), a balance-maintaining database trigger and low-stock badges.
 - Draft sales orders with multiple lines and server-sourced price snapshots.
 - Atomic confirmation: lock order and products, check stock, reduce stock, append movements, create one invoice, confirm order. Insufficient stock changes nothing. Confirmation is idempotent; concurrent orders cannot oversell.
 - Numbered invoices with frozen order lines, subtotal, rounded 7% VAT, total and print layout (browser Print → Save as PDF).
@@ -31,7 +32,9 @@ The app uses the isolated `siam_erp` schema in the owner's existing Supabase pro
 
 | Action | Admin | Sales | Warehouse | Accountant |
 |---|---|---|---|---|
-| View operational records/dashboard | Yes | Yes | Yes | Yes |
+| View dashboard/products | Yes | Yes | Yes | Yes |
+| View customers/orders/invoices | Yes | Yes | No | Yes |
+| Open Accounting / view payments | Yes | No | No | Yes |
 | Manage products | Yes | No | No | No |
 | Manage customers | Yes | Yes | No | No |
 | Create/confirm orders | Yes | Yes | No | No |
@@ -55,11 +58,11 @@ erDiagram
     invoices ||--o| payments : settles
     users { bigint id PK string username UK string password_hash string role boolean active }
     sessions { string token_hash PK bigint user_id FK timestamp expires_at }
-    products { bigint id PK string sku UK string name string unit decimal price decimal stock decimal reorder_level boolean active }
-    customers { bigint id PK string name string email string address boolean active }
+    products { bigint id PK string sku UK string name string unit decimal price decimal cost decimal stock decimal reorder_level boolean active }
+    customers { bigint id PK string name string email string address string tax_id int payment_terms boolean active }
     orders { bigint id PK bigint customer_id FK string status bigint created_by FK timestamp created_at }
     order_lines { bigint id PK bigint order_id FK bigint product_id FK string sku string name decimal quantity decimal unit_price }
-    invoices { bigint id PK bigint order_id FK string customer_name string customer_address decimal subtotal decimal vat decimal total string status timestamp created_at }
+    invoices { bigint id PK bigint order_id FK string customer_name string customer_address string customer_tax_id date due_date decimal subtotal decimal vat decimal total string status timestamp created_at }
     payments { bigint id PK bigint invoice_id FK decimal amount string method string reference bigint created_by FK timestamp created_at }
     stock_movements { bigint id PK bigint product_id FK decimal quantity string reason bigint order_id FK bigint created_by FK timestamp created_at }
 ```
@@ -88,7 +91,7 @@ Apply `database/schema.sql` once to a fresh database. Create accounts using **lo
 
 ## API
 
-`POST /api/{action}` accepts a JSON object. Actions: `login`, `logout`, `me`, `state`, `product_save`, `product_active`, `customer_save`, `customer_active`, `stock_in`, `order_create`, `order_confirm`, `payment_create`. `GET /api/health` checks server availability; authenticated `POST /api/health` checks database access. See `/docs` for the transport API and `database/schema.sql` for validation and transaction rules.
+`POST /api/{action}` accepts a JSON object. Actions: `login`, `logout`, `me`, `state`, `product_save`, `product_active`, `customer_save`, `customer_active`, `stock_in`, `order_create`, `order_confirm`, `payment_create`, `accounting`. `GET /api/health` checks server availability; authenticated `POST /api/health` checks database access. See `/docs` for the transport API and `database/schema.sql` for validation and transaction rules.
 
 Authentication uses a random 256-bit session token in an HttpOnly, SameSite=Lax cookie (Secure on Vercel). Only a SHA-256 token hash is stored; sessions expire after eight hours and logout revokes them. Passwords are bcrypt-hashed. Role assignments are database-controlled, never supplied by the client. Cross-origin writes are rejected.
 

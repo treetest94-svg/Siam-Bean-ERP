@@ -1,1 +1,8 @@
-{"name":"siam-bean-erp","version":"1.0.0","private":true,"scripts":{"build":"npm ci --prefix frontend && npm run build --prefix frontend"}}
+{
+  "name": "siam-bean-erp",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "npm ci --prefix frontend && npm run build --prefix frontend"
+  }
+}

@@ -30,10 +30,15 @@ As Accountant, I want to record a full payment so the invoice is settled.
 - A duplicate payment is rejected; dashboard receivables update.
 
 ## Master data
-Products: SKU, name, unit, positive price, nonnegative reorder level. Customers: name, valid email, billing address. Both support create, list, edit, deactivate. No destructive deletion of master records.
+Products: SKU, name, unit, nonnegative price, nonnegative reorder level. Customers: name, required 13-digit tax ID, valid email, billing address, payment terms. Both support create, list, edit, deactivate. No destructive deletion of master records.
 
 ## Dashboard and deployment
 Sales today (Bangkok), receivables, open invoices, low-stock count, and collected payments are database aggregates. Public HTTPS application, no localhost dependencies, responsive CSS, environment configuration outside source control.
 
 ## Scope decisions
 One company; full payments; manual stock-in; no delivery stage. Draft price snapshots freeze at creation. Historical invoices retain the old price and customer billing details. Application accounts are provisioned by the operator, as permitted by the course reference.
+
+## US-5 — Customer search
+Partial-name search filters immediately in the browser; pages contain at most 20 customers. Previous/Next controls navigate the results.
+
+Sales entering Accounting receives an access-denied screen and HTTP 403 from `/api/accounting`. Everyone may view aggregate dashboard values; Warehouse receives no customer/order/invoice/payment records.
