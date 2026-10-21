@@ -1,0 +1,23 @@
+{
+  "name": "siam-bean-erp-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "lucide-react": "^0.577.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "@vitejs/plugin-react": "6.1.2"
+  }
+}
