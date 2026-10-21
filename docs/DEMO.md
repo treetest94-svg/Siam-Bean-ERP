@@ -13,7 +13,7 @@ Sign in as Sales. Show Café Lune and ARB-1KG. New sales order → Café Lune �
 Sign out and sign in as Accountant. Open that invoice → Record payment → bank transfer → reference DEMO → Record full payment. Show Paid and dashboard receivables/collected amounts changing. This records a classroom payment, not a real money transfer.
 
 ## 5:00–7:00 — US-2 and US-3
-Sign in as Warehouse. Show low-stock badges and receive 5 units on a different product. Open Demo & help → Test blocked sales action (403). Explain that hidden buttons are a convenience; the backend permission check is the actual control. If time permits, as Sales create an order larger than available stock, confirm, and show the 409 and unchanged inventory.
+First sign in as Sales and open Accounting: show Access denied and explain that the API returns 403. Then sign in as Warehouse. Show low-stock badges and receive 5 units on a different product. Open Demo & help → Test blocked sales action (403). Explain that hidden buttons are a convenience; the backend permission check is the actual control. If time permits, as Sales create an order larger than available stock, confirm, and show the 409 and unchanged inventory.
 
 ## 7:00–10:00 — Questions
 - Why relational? Foreign keys connect customers, orders, lines, products, invoices and payments.

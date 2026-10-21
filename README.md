@@ -5,7 +5,7 @@ A full-stack classroom ERP for a coffee-bean distributor: sales, inventory, invo
 ## Submission
 
 - Public repository: https://github.com/treetest94-svg/Siam-Bean-ERP
-- Public application: deployment URL will be recorded after verification.
+- Public application: https://siam-bean-erp-kohl.vercel.app/
 - [Demo script](docs/DEMO.md) · [User stories and acceptance criteria](docs/SPEC.md) · [Team handover](docs/TEAM.md)
 - Credentials are delivered privately to the project owner. **No passwords, keys, personal data or real customer records belong in this repository.**
 
