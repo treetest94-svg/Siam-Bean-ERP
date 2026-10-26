@@ -12,6 +12,7 @@ A full-stack classroom ERP for a coffee-bean distributor: sales, inventory, invo
 ## Features
 
 - Demo usernames: `admin`, `sales`, `warehouse`, `accountant`. Passwords are in the privately delivered account sheet, following the requirement to keep public source free of credentials.
+- Admin-only Users page: create accounts with a username, password and role, or delete their access. Deletion immediately revokes sessions and blocks login while preserving historical creator references. Self-deletion and deletion of the last active Admin are blocked. Deleted usernames remain reserved.
 - Four authenticated roles: Admin, Sales, Warehouse and Accountant. Disallowed actions return HTTP 403 from the backend and database gateway.
 - Create, list, edit and deactivate products/customers; required-field, unique-SKU and numeric validation.
 - Manual stock-in with movement history (including opening balances), a balance-maintaining database trigger and low-stock badges.
@@ -35,6 +36,7 @@ The app uses the isolated `siam_erp` schema in the owner's existing Supabase pro
 | View dashboard/products | Yes | Yes | Yes | Yes |
 | View customers/orders/invoices | Yes | Yes | No | Yes |
 | Open Accounting / view payments | Yes | No | No | Yes |
+| Add/delete user accounts | Yes | No | No | No |
 | Manage products | Yes | No | No | No |
 | Manage customers | Yes | Yes | No | No |
 | Create/confirm orders | Yes | Yes | No | No |
@@ -91,9 +93,9 @@ Apply `database/schema.sql` once to a fresh database. Create accounts using **lo
 
 ## API
 
-`POST /api/{action}` accepts a JSON object. Actions: `login`, `logout`, `me`, `state`, `product_save`, `product_active`, `customer_save`, `customer_active`, `stock_in`, `order_create`, `order_confirm`, `payment_create`, `accounting`. `GET /api/health` checks server availability; authenticated `POST /api/health` checks database access. See `/docs` for the transport API and `database/schema.sql` for validation and transaction rules.
+`POST /api/{action}` accepts a JSON object. Actions: `login`, `logout`, `me`, `state`, `product_save`, `product_active`, `customer_save`, `customer_active`, `stock_in`, `order_create`, `order_confirm`, `payment_create`, `accounting`, `user_list`, `user_create`, `user_delete`. `GET /api/health` checks server availability; authenticated `POST /api/health` checks database access. See `/docs` for the transport API and `database/schema.sql` for validation and transaction rules.
 
-Authentication uses a random 256-bit session token in an HttpOnly, SameSite=Lax cookie (Secure on Vercel). Only a SHA-256 token hash is stored; sessions expire after eight hours and logout revokes them. Passwords are bcrypt-hashed. Role assignments are database-controlled, never supplied by the client. Cross-origin writes are rejected.
+Authentication uses a random 256-bit session token in an HttpOnly, SameSite=Lax cookie (Secure on Vercel). Only a SHA-256 token hash is stored; sessions expire after eight hours and logout revokes them. Passwords are bcrypt-hashed. Only an authenticated Admin can assign a role when creating an account; the database validates the role and permission. Cross-origin writes are rejected.
 
 ## Verification
 
@@ -111,7 +113,7 @@ The private JSON maps the four role usernames to their passwords. Tests create i
 - This is a one-company classroom ERP with synthetic records, not a production accounting system.
 - RLS is enabled with no table grants/policies: direct access is deliberately denied. The authenticated gateway is the only application access path.
 - Supabase advisors flag the intentional SECURITY DEFINER gateway: it requires valid credentials/session tokens, fixes its search path, uses static SQL and enforces role permissions. See [advisor guidance](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable).
-- Login throttling is per application instance; a production rollout should use shared rate limiting, account recovery, stronger audit retention and dedicated accounts per person.
+- Login throttling is per application instance; a production rollout should use shared rate limiting, account recovery and stronger audit retention. Admin can now create dedicated accounts per person.
 - No signup, multi-tenancy, purchasing, email delivery, discounts or partial payments. These are outside the minimum scope.
 - AI-assisted implementation. Third-party Matt Pocock skills were not installed or executed. Do not claim otherwise. Tests were added after the initial implementation, not presented as a fabricated TDD history.
 - Team members must make their own genuine contributions and explain the code; see `docs/TEAM.md`.

@@ -17,7 +17,7 @@ create index on siam_erp.order_lines(product_id);
 create index on siam_erp.stock_movements(product_id);
 -- All writes and reads pass through one authenticated, role-enforcing transaction.
 create function public.siam_erp_api(p_action text,p_token text default '',p_data jsonb default '{}') returns jsonb language plpgsql security definer set search_path = siam_erp, pg_temp as $$
-declare u siam_erp.users%rowtype; r jsonb; tok text; x jsonb; o siam_erp.orders%rowtype; inv siam_erp.invoices%rowtype; prod siam_erp.products%rowtype; cid bigint; oid bigint; pid bigint; amount numeric; subtotal numeric; q numeric; allowed text[];
+declare u siam_erp.users%rowtype; r jsonb; tok text; x jsonb; o siam_erp.orders%rowtype; inv siam_erp.invoices%rowtype; prod siam_erp.products%rowtype; cid bigint; oid bigint; pid bigint; amount numeric; subtotal numeric; q numeric; allowed text[]; target_user siam_erp.users%rowtype; new_username text; new_role text; new_password text;
 begin
  if p_action='login' then
    select * into u from siam_erp.users where username=lower(trim(p_data->>'username')) and active;
@@ -31,7 +31,7 @@ begin
  if p_action='logout' then delete from siam_erp.sessions where token_hash=encode(sha256(convert_to(p_token,'UTF8')),'hex'); return '{}'::jsonb; end if;
  if p_action='me' then return jsonb_build_object('username',u.username,'role',u.role); end if;
  allowed:=case
- when p_action in ('product_save','product_active') then array['admin']
+ when p_action in ('product_save','product_active','user_list','user_create','user_delete') then array['admin']
  when p_action in ('customer_save','customer_active','order_create','order_confirm') then array['admin','sales']
  when p_action='stock_in' then array['admin','warehouse']
  when p_action in ('payment_create','accounting') then array['admin','accountant']
@@ -40,8 +40,48 @@ begin
  if not (u.role=any(allowed)) then return jsonb_build_object('error','Your role cannot perform this action','status',403); end if;
  if p_action='health' then return '{"database":"connected"}'::jsonb; end if;
  if p_action='accounting' then return jsonb_build_object('payments',(select coalesce(jsonb_agg(to_jsonb(pay)),'[]') from siam_erp.payments pay)); end if;
+ if p_action='user_list' then
+   return jsonb_build_object('users',(select coalesce(jsonb_agg(jsonb_build_object('id',a.id,'username',a.username,'role',a.role,'active',a.active) order by a.id),'[]') from siam_erp.users a));
+ end if;
+ if p_action in ('user_create','user_delete') then
+   -- Serialize account changes and recheck the actor after waiting for the lock.
+   perform pg_advisory_xact_lock(741852963);
+   if not exists(select 1 from siam_erp.users a where a.id=u.id and a.active and a.role='admin') then
+     return '{"error":"Please sign in","status":401}'::jsonb;
+   end if;
+   if p_action='user_create' then
+     new_username:=lower(trim(p_data->>'username'));
+     new_role:=p_data->>'role';
+     new_password:=p_data->>'password';
+     if jsonb_typeof(p_data->'username') is distinct from 'string' or new_username !~ '^[a-z0-9][a-z0-9_.-]{2,39}$' then
+       return '{"error":"Username must be 3-40 characters: letters, numbers, dots, underscores or hyphens","status":422}'::jsonb;
+     end if;
+     if new_role is null or new_role not in ('admin','sales','warehouse','accountant') then
+       return '{"error":"Choose a valid role","status":422}'::jsonb;
+     end if;
+     if jsonb_typeof(p_data->'password') is distinct from 'string' or length(new_password)<12 or octet_length(new_password)>72 then
+       return '{"error":"Password must contain at least 12 characters and at most 72 UTF-8 bytes","status":422}'::jsonb;
+     end if;
+     if exists(select 1 from siam_erp.users a where a.username=new_username) then
+       return '{"error":"Username is already in use, including deleted accounts","status":409}'::jsonb;
+     end if;
+     insert into siam_erp.users(username,password_hash,role) values(new_username,extensions.crypt(new_password,extensions.gen_salt('bf',12)),new_role) returning id into pid;
+     return jsonb_build_object('id',pid,'username',new_username,'role',new_role,'active',true);
+   end if;
+   select * into target_user from siam_erp.users a where a.id=(p_data->>'id')::bigint for update;
+   if target_user.id is null then return '{"error":"User not found","status":404}'::jsonb; end if;
+   if target_user.active and target_user.role='admin' and (select count(*) from siam_erp.users a where a.active and a.role='admin')<=1 then
+     return '{"error":"The last active Admin cannot be deleted","status":409}'::jsonb;
+   end if;
+   if target_user.id=u.id then return '{"error":"You cannot delete your own account","status":409}'::jsonb; end if;
+   -- Soft deletion preserves creator foreign keys on historical business records.
+   update siam_erp.users set active=false where id=target_user.id;
+   delete from siam_erp.sessions where user_id=target_user.id;
+   return jsonb_build_object('ok',true,'id',target_user.id,'active',false);
+ end if;
  if p_action='state' then
    return jsonb_build_object(
+    'users',case when u.role='admin' then (select coalesce(jsonb_agg(jsonb_build_object('id',a.id,'username',a.username,'role',a.role,'active',a.active) order by a.id),'[]') from siam_erp.users a) else '[]'::jsonb end,
     'products',(select coalesce(jsonb_agg(to_jsonb(p) order by p.id),'[]') from siam_erp.products p),
     'customers',case when u.role='warehouse' then '[]'::jsonb else (select coalesce(jsonb_agg(to_jsonb(c) order by c.id),'[]') from siam_erp.customers c) end,
     'orders',case when u.role='warehouse' then '[]'::jsonb else (select coalesce(jsonb_agg(to_jsonb(z) order by z.id desc),'[]') from (select ord.*,c.name customer_name,(select coalesce(jsonb_agg(to_jsonb(l) order by l.id),'[]') from siam_erp.order_lines l where l.order_id=ord.id) lines from siam_erp.orders ord join siam_erp.customers c on c.id=ord.customer_id) z) end,

@@ -33,3 +33,14 @@ The integration script uses identifiable synthetic QA records, separate from the
 
 ## Honest process notes
 Tests were added after the initial implementation. This repository does not fabricate test-first commits, member contributions or execution of unavailable third-party skills. Every group member still needs to review the work, make their own genuine contribution and rehearse the live demo.
+
+## Admin user management update — 27 October 2026
+
+- Added Admin-only account creation and deletion on the existing production URL.
+- Username, password length and role validation run in the database gateway.
+- User listings contain only id, username, role and active status.
+- Deletion revokes sessions immediately and preserves historical creator references.
+- The current account and last active Admin cannot be deleted. Account mutations use a transaction-scoped advisory lock.
+- A rollback-only database check verified that deleting an account preserves its historical order.
+- 31 targeted live API assertions passed, including creation, role restrictions, validation and immediate session revocation.
+- Targeted live API checks are in `tests/user_management.py`; credentials must be supplied through an external private JSON file.

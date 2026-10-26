@@ -54,9 +54,11 @@ const nav = [
   { id: "products", name: "Products", icon: Package },
   { id: "customers", name: "Customers", icon: Users },
   { id: "invoices", name: "Invoices", icon: Receipt },
+  { id: "users", name: "Users", icon: Users },
   { id: "accounting", name: "Accounting", icon: ShieldCheck },
 ];
 const empty = {
+  users: [],
   products: [],
   customers: [],
   orders: [],
@@ -126,37 +128,39 @@ export default function App() {
     setError("");
     setModal({ kind, ...row });
     setForm(
-      kind === "order"
-        ? { customer_id: "", lines: [{ product_id: "", quantity: 1 }] }
-        : kind === "stock"
-          ? { product_id: row.id || "", quantity: "", reason: "" }
-          : kind === "payment"
-            ? {
-                invoice_id: row.id,
-                amount: row.total,
-                method: "bank_transfer",
-                reference: "",
-              }
-            : kind === "product"
+      kind === "user"
+        ? { username: "", password: "", role: "sales" }
+        : kind === "order"
+          ? { customer_id: "", lines: [{ product_id: "", quantity: 1 }] }
+          : kind === "stock"
+            ? { product_id: row.id || "", quantity: "", reason: "" }
+            : kind === "payment"
               ? {
-                  sku: "",
-                  name: "",
-                  unit: "kg",
-                  price: "",
-                  cost: 0,
-                  reorder_level: 20,
-                  ...row,
+                  invoice_id: row.id,
+                  amount: row.total,
+                  method: "bank_transfer",
+                  reference: "",
                 }
-              : kind === "customer"
+              : kind === "product"
                 ? {
+                    sku: "",
                     name: "",
-                    email: "",
-                    address: "",
-                    tax_id: "",
-                    payment_terms: 0,
+                    unit: "kg",
+                    price: "",
+                    cost: 0,
+                    reorder_level: 20,
                     ...row,
                   }
-                : row,
+                : kind === "customer"
+                  ? {
+                      name: "",
+                      email: "",
+                      address: "",
+                      tax_id: "",
+                      payment_terms: 0,
+                      ...row,
+                    }
+                  : row,
     );
   }
   function change(key: string, value: any) {
@@ -175,7 +179,10 @@ export default function App() {
       await api(action, payload);
       await refresh();
       setNotice(success);
-      if (close) setModal(null);
+      if (close) {
+        setModal(null);
+        setForm({});
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -186,21 +193,29 @@ export default function App() {
     e.preventDefault();
     const a = modal?.kind;
     await run(
-      a === "product"
-        ? "product_save"
-        : a === "customer"
-          ? "customer_save"
-          : a === "stock"
-            ? "stock_in"
-            : a === "payment"
-              ? "payment_create"
-              : "order_create",
+      a === "user"
+        ? "user_create"
+        : a === "userDelete"
+          ? "user_delete"
+          : a === "product"
+            ? "product_save"
+            : a === "customer"
+              ? "customer_save"
+              : a === "stock"
+                ? "stock_in"
+                : a === "payment"
+                  ? "payment_create"
+                  : "order_create",
       form,
-      a === "order"
-        ? "Draft order created. Review it before confirming."
-        : a === "payment"
-          ? "Payment recorded. Invoice marked Paid."
-          : "Changes saved successfully.",
+      a === "user"
+        ? "User created. Share their login details privately."
+        : a === "userDelete"
+          ? "User deleted. Their access has been revoked."
+          : a === "order"
+            ? "Draft order created. Review it before confirming."
+            : a === "payment"
+              ? "Payment recorded. Invoice marked Paid."
+              : "Changes saved successfully.",
     );
   }
   async function login(e: FormEvent) {
@@ -374,8 +389,9 @@ export default function App() {
           {nav
             .filter(
               (n) =>
-                user.role !== "warehouse" ||
-                !["orders", "customers", "invoices"].includes(n.id),
+                (n.id !== "users" || user.role === "admin") &&
+                (user.role !== "warehouse" ||
+                  !["orders", "customers", "invoices"].includes(n.id)),
             )
             .map((n) => (
               <button
@@ -506,6 +522,8 @@ export default function App() {
                       invoices: "Every confirmed sale, documented clearly.",
                       accounting:
                         "Record full payments and follow your receivables.",
+                      users:
+                        "Manage team accounts and their access to the workspace.",
                       help: "A practical walkthrough of the four user stories.",
                     } as Row
                   )[page]
@@ -513,6 +531,12 @@ export default function App() {
               </p>
             </div>
             <div className="head-actions">
+              {page === "users" && roles("admin") && (
+                <button className="primary" onClick={() => open("user")}>
+                  <Plus size={18} />
+                  Add user
+                </button>
+              )}
               {page === "dashboard" && roles("admin", "sales") && (
                 <button className="primary" onClick={() => open("order")}>
                   <Plus size={18} />
@@ -859,6 +883,49 @@ export default function App() {
                   Refresh
                 </button>
               </div>
+              {page === "users" && roles("admin") && (
+                <>
+                  <p className="small">
+                    Deleted users cannot sign in. Their historical orders and
+                    payments remain available.
+                  </p>
+                  {table(
+                    ["USERNAME", "ROLE", "STATUS", ""],
+                    filtered("users").map((account: Row) => (
+                      <tr key={account.id}>
+                        <td>
+                          <strong>{account.username}</strong>
+                          {account.username === user.username && " (you)"}
+                        </td>
+                        <td>{account.role}</td>
+                        <td>
+                          <Badge tone={account.active ? "green" : "neutral"}>
+                            {account.active ? "Active" : "Deleted"}
+                          </Badge>
+                        </td>
+                        <td>
+                          <button
+                            className="secondary"
+                            disabled={
+                              busy ||
+                              !account.active ||
+                              account.username === user.username
+                            }
+                            onClick={() =>
+                              open("userDelete", {
+                                id: account.id,
+                                username: account.username,
+                              })
+                            }
+                          >
+                            Delete user
+                          </button>
+                        </td>
+                      </tr>
+                    )),
+                  )}
+                </>
+              )}
               {page === "products" &&
                 table(
                   ["PRODUCT", "SKU", "UNIT PRICE", "STOCK", "STATUS", ""],
@@ -1189,6 +1256,8 @@ export default function App() {
                       {
                         product: form.id ? "Edit product" : "Add a product",
                         customer: form.id ? "Edit customer" : "Add a customer",
+                        user: "Add a user",
+                        userDelete: "Delete user",
                         stock: "Receive stock",
                         order: "New sales order",
                         payment: "Record full payment",
@@ -1376,6 +1445,55 @@ export default function App() {
               </div>
             ) : (
               <form onSubmit={submit}>
+                {modal.kind === "user" && (
+                  <>
+                    <Field label="Username">
+                      <input
+                        required
+                        autoComplete="off"
+                        minLength={3}
+                        maxLength={40}
+                        pattern="[A-Za-z0-9][A-Za-z0-9_.\-]{2,39}"
+                        value={form.username || ""}
+                        onChange={(e) => change("username", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Password">
+                      <input
+                        required
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={12}
+                        maxLength={72}
+                        value={form.password || ""}
+                        onChange={(e) => change("password", e.target.value)}
+                      />
+                    </Field>
+                    <p className="small">
+                      Use at least 12 characters. Usernames are saved in
+                      lowercase. Share login details privately.
+                    </p>
+                    <Field label="Role">
+                      <select
+                        required
+                        value={form.role || "sales"}
+                        onChange={(e) => change("role", e.target.value)}
+                      >
+                        <option value="sales">Sales</option>
+                        <option value="warehouse">Warehouse</option>
+                        <option value="accountant">Accountant</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </Field>
+                  </>
+                )}
+                {modal.kind === "userDelete" && (
+                  <p>
+                    Delete <strong>{modal.username}</strong>? They will be
+                    signed out and cannot sign in again. Their past orders and
+                    payments will be preserved.
+                  </p>
+                )}
                 {modal.kind === "product" && (
                   <>
                     <Field label="Product name">
@@ -1677,11 +1795,15 @@ export default function App() {
                   <button className="primary" disabled={busy}>
                     {busy
                       ? "Saving…"
-                      : modal.kind === "order"
-                        ? "Create draft order"
-                        : modal.kind === "payment"
-                          ? "Record full payment"
-                          : "Save changes"}
+                      : modal.kind === "user"
+                        ? "Create user"
+                        : modal.kind === "userDelete"
+                          ? "Delete user"
+                          : modal.kind === "order"
+                            ? "Create draft order"
+                            : modal.kind === "payment"
+                              ? "Record full payment"
+                              : "Save changes"}
                     <Check size={17} />
                   </button>
                 </div>
